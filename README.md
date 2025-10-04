@@ -1,3 +1,6 @@
+[![Test](https://github.com/Joe-Heffer/ii-agent-telegram-bridge/actions/workflows/test.yml/badge.svg)](https://github.com/Joe-Heffer/ii-agent-telegram-bridge/actions/workflows/test.yml)
+[![CodeQL](https://github.com/Joe-Heffer/ii-agent-telegram-bridge/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/Joe-Heffer/ii-agent-telegram-bridge/actions/workflows/github-code-scanning/codeql)
+
 # Telegram chat bot bridge for ii-agent
 
 A bridge server for [ii-agent](https://github.com/Intelligent-Internet/ii-agent) to use a [Telegram bot](https://core.telegram.org/bots).
