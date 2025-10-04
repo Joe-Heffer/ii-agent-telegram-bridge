@@ -30,6 +30,8 @@ jobs:
           pip install -e ".[test]"
 
       - name: Run tests
+        env:
+          TELEGRAM_BOT_TOKEN: "test-token-for-ci"
         run: |
           pytest tests/ -v --cov=telegram_bridge --cov-report=term-missing
 

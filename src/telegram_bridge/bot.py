@@ -7,6 +7,13 @@ from telegram_bridge.agent import IIAgentClient
 from telegram_bridge.constants import SPLIT_MESSAGE_LENGTH, TELEGRAM_BOT_TOKEN
 
 logger = logging.getLogger(__name__)
+
+if not TELEGRAM_BOT_TOKEN:
+    raise ValueError(
+        "TELEGRAM_BOT_TOKEN environment variable is required. "
+        "Please set it in your .env file or environment."
+    )
+
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 agent = IIAgentClient()
 
