@@ -62,11 +62,7 @@ class IIAgentClient:
             timeout=timeout,
         )
 
-        try:
-            ai_reply = response.json()["response"]
-        except KeyError:
-            logger.error("No response received from ii-agent")
-            ai_reply = "Sorry, something went wrong"
+        ai_reply = response.json()["response"]
         logger.debug(f"Received response from ii-agent: {len(ai_reply)} chars")
 
         return ai_reply
