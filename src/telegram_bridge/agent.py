@@ -1,8 +1,11 @@
-"""ii-agent client for handling chat interactions."""
+"""ii-agent client for handling chat interactions via WebSocket."""
 
+import asyncio
+import json
 import logging
+from typing import Optional
 
-import requests
+import websockets
 
 from telegram_bridge.constants import II_AGENT_URL
 
@@ -10,59 +13,172 @@ logger = logging.getLogger(__name__)
 
 
 class IIAgentClient:
-    """Client for interacting with ii-agent API."""
+    """Client for interacting with ii-agent WebSocket API."""
 
-    def __init__(self, base_url: str = II_AGENT_URL):
+    def __init__(
+        self,
+        base_url: str = II_AGENT_URL,
+        model_name: str = "claude-sonnet-4-20250514",
+        device_id: str = "telegram-bridge",
+    ):
         """Initialize the ii-agent client.
 
         Args:
             base_url: Base URL for the ii-agent API
+            model_name: LLM model to use
+            device_id: Device identifier for the client
         """
-        self.base_url = base_url
-        self.session = requests.Session()
+        # Convert HTTP URL to WebSocket URL
+        ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://")
+        self.ws_url = f"{ws_url}/ws?device_id={device_id}"
+        self.model_name = model_name
+        self.websocket: Optional[websockets.WebSocketClientProtocol] = None
+        self.session_id: Optional[str] = None
+        self._connected = False
+        self._initialized = False
 
-    def _post(self, endpoint: str, data: dict, timeout: int = 120) -> requests.Response:
-        """Make a POST request to the ii-agent API.
-
-        Args:
-            endpoint: API endpoint path
-            data: JSON data to send
-            timeout: Request timeout in seconds
-
-        Returns:
-            Response object
+    async def connect(self) -> None:
+        """Establish WebSocket connection and initialize agent.
 
         Raises:
-            requests.RequestException: If the request fails
+            ConnectionError: If connection or initialization fails
         """
-        url = f"{self.base_url}{endpoint}"
-        response = self.session.post(url, json=data, timeout=timeout)
-        response.raise_for_status()
-        return response
+        if self._connected:
+            return
 
-    def send_message(self, message: str, session_id: str, timeout: int = 120) -> str:
+        try:
+            self.websocket = await websockets.connect(self.ws_url)
+            logger.debug("WebSocket connection established")
+
+            # Wait for connection confirmation
+            response = await self.websocket.recv()
+            event = json.loads(response)
+
+            if event["type"] != "CONNECTION_ESTABLISHED":
+                raise ConnectionError(f"Unexpected event type: {event['type']}")
+
+            logger.debug(f"Connected to workspace: {event['content'].get('workspace_path')}")
+            self._connected = True
+
+            # Initialize agent
+            await self._initialize_agent()
+
+        except Exception as e:
+            logger.error(f"Failed to connect to ii-agent: {e}")
+            if self.websocket:
+                await self.websocket.close()
+                self.websocket = None
+            raise ConnectionError(f"Failed to connect to ii-agent: {e}")
+
+    async def _initialize_agent(self) -> None:
+        """Initialize the agent with model configuration.
+
+        Raises:
+            RuntimeError: If initialization fails
+        """
+        init_message = {
+            "type": "init_agent",
+            "content": {
+                "model_name": self.model_name,
+                "tool_args": {},
+                "thinking_tokens": 0,
+            },
+        }
+
+        await self.websocket.send(json.dumps(init_message))
+        logger.debug(f"Initializing agent with model: {self.model_name}")
+
+        # Wait for agent initialization
+        while True:
+            response = await self.websocket.recv()
+            event = json.loads(response)
+
+            if event["type"] == "AGENT_INITIALIZED":
+                logger.debug("Agent initialized successfully")
+                self._initialized = True
+                return
+            elif event["type"] == "ERROR":
+                error_msg = event["content"].get("message", "Unknown error")
+                raise RuntimeError(f"Agent initialization failed: {error_msg}")
+
+    async def send_message(self, message: str, session_id: str, timeout: int = 120) -> str:
         """Send a message to ii-agent and get response.
 
         Args:
             message: The message text to send
-            session_id: Session identifier (typically user ID)
+            session_id: Session identifier (typically user/chat ID)
             timeout: Request timeout in seconds
 
         Returns:
-            The response text from ii-agent
+            The complete response text from ii-agent
 
         Raises:
-            requests.RequestException: If the request fails
+            RuntimeError: If not connected or message fails
+            asyncio.TimeoutError: If response times out
         """
+        if not self._connected or not self._initialized:
+            await self.connect()
+
         logger.debug(f"Sending message to ii-agent for session {session_id}")
 
-        response = self._post(
-            f"/api/sessions/{session_id}/messages",
-            {"content": message},
-            timeout=timeout,
-        )
+        # Send query
+        query_message = {
+            "type": "query",
+            "content": {
+                "text": message,
+                "resume": False,
+                "files": [],
+            },
+        }
 
-        ai_reply = response.json()["response"]
-        logger.debug(f"Received response from ii-agent: {len(ai_reply)} chars")
+        await self.websocket.send(json.dumps(query_message))
 
-        return ai_reply
+        # Collect response with timeout
+        response_text = ""
+        try:
+            async with asyncio.timeout(timeout):
+                while True:
+                    response = await self.websocket.recv()
+                    event = json.loads(response)
+                    event_type = event["type"]
+                    content = event["content"]
+
+                    if event_type == "agent_response":
+                        # Accumulate response deltas
+                        if "delta" in content:
+                            response_text += content["delta"]
+                        elif "text" in content:
+                            response_text += content["text"]
+
+                    elif event_type == "tool_use":
+                        # Log tool usage
+                        tool_name = content.get("tool_name", "unknown")
+                        logger.debug(f"Agent using tool: {tool_name}")
+
+                    elif event_type == "tool_result":
+                        # Log tool results
+                        is_error = content.get("is_error", False)
+                        if is_error:
+                            logger.warning(f"Tool error: {content.get('output', '')[:200]}")
+
+                    elif event_type == "STREAM_COMPLETE":
+                        # Response complete
+                        logger.debug(f"Received complete response: {len(response_text)} chars")
+                        return response_text
+
+                    elif event_type == "ERROR":
+                        error_msg = content.get("message", "Unknown error")
+                        raise RuntimeError(f"Agent error: {error_msg}")
+
+        except asyncio.TimeoutError:
+            logger.error(f"Response timeout after {timeout} seconds")
+            raise
+
+    async def close(self) -> None:
+        """Close the WebSocket connection."""
+        if self.websocket:
+            await self.websocket.close()
+            self.websocket = None
+            self._connected = False
+            self._initialized = False
+            logger.debug("WebSocket connection closed")

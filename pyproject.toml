@@ -10,11 +10,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Joe Heffer", email = "jheffer@gmail.com" }]
-dependencies = ["pyTelegramBotAPI", "requests", "python-dotenv"]
+dependencies = ["pyTelegramBotAPI", "websockets", "python-dotenv"]
 
 [project.optional-dependencies]
 dev = ["ruff"]
-test = ["pytest", "pytest-cov"]
+test = ["pytest", "pytest-cov", "pytest-asyncio"]
 
 [project.scripts]
 telegram-bridge = "telegram_bridge.__main__:main"
