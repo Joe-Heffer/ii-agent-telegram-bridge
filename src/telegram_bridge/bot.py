@@ -26,8 +26,8 @@ def handle_message(message):
         # Show typing indicator
         bot.send_chat_action(message.chat.id, "typing")
 
-        # Get response from ii-agent
-        ai_reply = agent.send_message(message.text, str(message.from_user.id))
+        # Get response from ii-agent (using chat.id as session_id)
+        ai_reply = agent.send_message(message.text, session_id=str(message.chat.id))
 
         # Split long messages (Telegram limit is 4096 chars)
         if len(ai_reply) > SPLIT_MESSAGE_LENGTH:
