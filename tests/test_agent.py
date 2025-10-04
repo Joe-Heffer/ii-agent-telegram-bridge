@@ -73,9 +73,7 @@ class TestIIAgentClient:
     @pytest.mark.asyncio
     async def test_connect_unexpected_event(self, agent_client, mock_websocket):
         """Test connection fails with unexpected event."""
-        mock_websocket.recv.return_value = json.dumps(
-            {"type": "UNEXPECTED", "content": {}}
-        )
+        mock_websocket.recv.return_value = json.dumps({"type": "UNEXPECTED", "content": {}})
 
         async def mock_connect(url):
             return mock_websocket

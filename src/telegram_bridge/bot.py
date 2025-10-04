@@ -36,9 +36,7 @@ def handle_message(message):
 
         # Get response from ii-agent (using chat.id as session_id)
         # Run async function in event loop
-        ai_reply = asyncio.run(
-            agent.send_message(message.text, session_id=str(message.chat.id))
-        )
+        ai_reply = asyncio.run(agent.send_message(message.text, session_id=str(message.chat.id)))
 
         # Split long messages (Telegram limit is 4096 chars)
         if len(ai_reply) > SPLIT_MESSAGE_LENGTH:
