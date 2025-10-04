@@ -29,16 +29,6 @@ With custom log level:
 telegram-bridge --log_level DEBUG
 ```
 
-## Development
+## Contributing
 
-Install with dev dependencies:
-
-```bash
-pip install -e ".[dev]"
-```
-
-Run linting:
-
-```bash
-ruff check --fix
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development instructions.
