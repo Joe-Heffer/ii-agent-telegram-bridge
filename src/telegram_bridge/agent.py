@@ -3,7 +3,6 @@
 import asyncio
 import json
 import logging
-from typing import Optional
 
 import websockets
 
@@ -32,8 +31,8 @@ class IIAgentClient:
         ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://")
         self.ws_url = f"{ws_url}/ws?device_id={device_id}"
         self.model_name = model_name
-        self.websocket: Optional[websockets.WebSocketClientProtocol] = None
-        self.session_id: Optional[str] = None
+        self.websocket: websockets.WebSocketClientProtocol | None = None
+        self.session_id: str | None = None
         self._connected = False
         self._initialized = False
 
@@ -68,7 +67,7 @@ class IIAgentClient:
             if self.websocket:
                 await self.websocket.close()
                 self.websocket = None
-            raise ConnectionError(f"Failed to connect to ii-agent: {e}")
+            raise ConnectionError(f"Failed to connect to ii-agent: {e}") from e
 
     async def _initialize_agent(self) -> None:
         """Initialize the agent with model configuration.
